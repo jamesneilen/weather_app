@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'screens/weather_screen.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(MyApp());
 }
 

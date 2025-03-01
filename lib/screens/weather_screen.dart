@@ -1,19 +1,20 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http/http.dart' as http;
 import 'package:weather_app/api/api_client.dart';
-import 'package:weather_app/api/api_endpoints.dart';
 import 'package:weather_app/models/weather_model.dart';
 import '../api/api_key.dart';
 
-class WeatherScreen extends ConsumerStatefulWidget {
+class WeatherScreen extends StatefulWidget {
   const WeatherScreen({super.key});
 
   @override
   _WeatherScreenState createState() => _WeatherScreenState();
 }
 
-class _WeatherScreenState extends ConsumerState<WeatherScreen> {
-  String? _errorMessage;
+class _WeatherScreenState extends State<WeatherScreen> {
+  String? _errorMessage = '';
   List<String> cities = [
     "Douala",
     "Yaounde",
@@ -33,18 +34,43 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen> {
   @override
   void initState() {
     super.initState();
-    fetchWeatherData();
+    fetchWeatherData("Bamenda");
   }
 
-  Future<void> fetchWeatherData() async {
-    List<Weather> weatherList = [];
+  Future<void> fetchWeatherData(String city) async {
+    if (!cities.contains(city)) {
+      setState(() {
+        _errorMessage = 'City not a capital of any region in Cameroon';
+        return;
+      });
+    }
     try {
-      for (String city in cities) {
-        final response = await _apiClient.get(
-          ApiEndpoints.currentWeather,
-          params: {"q": "$city,CM", "appid": ApiKey.openWeatherKey},
-        );
-        weatherList.add(Weather.fromJson(response.data));
+      final response = await http.get(
+        Uri.parse(
+          'https://api.openweathermap.org/data/2.5/weather?q=$city&appid=${ApiKey.openWeatherKey}&units=metric',
+        ),
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        print(data);
+        setState(() {
+          weatherData = [
+            Weather(
+              city: data['name'],
+              temperature: data['main']['temp'],
+              description: data['weather'][0]['description'],
+              humidity: data['main']['humidity'],
+              windSpeed: data['wind']['speed'],
+              icon: data['weather'][0]['icon'],
+            ),
+          ];
+          _errorMessage = '';
+        });
+      } else {
+        setState(() {
+          _errorMessage = 'Failed to load weather data';
+        });
       }
     } catch (e) {
       setState(() {
@@ -55,89 +81,85 @@ class _WeatherScreenState extends ConsumerState<WeatherScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // final weatherAsyncValue = ref.watch(weatherProvider(_cityController.text));
-
-    //   return Scaffold(
-    //     appBar: AppBar(title: Text("Cameroon Weather App")),
-    //     body: Padding(
-    //       padding: const EdgeInsets.all(16.0),
-    //       child: Column(
-    //         children: [
-    //           TextField(
-    //             controller: _cityController,
-    //             decoration: InputDecoration(
-    //               labelText: "Enter City",
-    //               suffixIcon: Icon(Icons.search),
-    //             ),
-    //             onSubmitted: (value) => setState(() {}),
-    //           ),
-    //           SizedBox(height: 20),
-    //            Column(
-    //                   children: [
-    //                     Text(
-    //                       "hey",
-    //                       style: TextStyle(
-    //                         fontSize: 24,
-    //                         fontWeight: FontWeight.bold,
-    //                       ),
-    //                     ),
-    //                     Image.network(
-    //                       "https://openweathermap.org/img/wn/${weather.icon}.png",
-    //                     ),
-    //                     Text(
-    //                       "${weather.temperature}°C",
-    //                       style: TextStyle(fontSize: 30),
-    //                     ),
-    //                     Text(weather.description, style: TextStyle(fontSize: 18)),
-    //                   ],
-    //                 ),
-    //             loading: () => CircularProgressIndicator(),
-    //             error: (error, stack) => Text("Error: $error"),
-    //           ),
-    //         ],
-    //       ),
-    //     ),
-    //   );
-    // }
     return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          "Cameroon Weather App",
-          style: TextStyle(fontWeight: FontWeight.w300, fontSize: 50),
-        ),
-        foregroundColor: Colors.green,
-
-        centerTitle: true,
-      ),
-      body: Center(
-        child: Column(
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 50),
-            Row(
-              children: [
-                Card(
-                  color: Colors.greenAccent,
-                  child: TextButton(
-                    onPressed: () {},
-                    child: Text(cities[0], selectionColor: Colors.grey),
-                  ),
-                ),
-              ],
+      appBar: AppBar(),
+      body: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          SizedBox(height: 20),
+          Container(
+            width: 500,
+            height: 50,
+            child: SearchBar(
+              leading: Icon(Icons.search, color: Colors.green),
+              hintText: "Enter City",
+              hintStyle: WidgetStateProperty.all(
+                TextStyle(color: Colors.green),
+              ),
+              controller: _cityController,
+              onSubmitted: (value) => fetchWeatherData(value),
             ),
-            ListView.builder(
+          ),
+          SizedBox(height: 20),
+
+          Expanded(
+            child: ListView.builder(
               itemCount: weatherData.length,
               itemBuilder: (context, index) {
                 final weather = weatherData[index];
                 return ListTile(
-                  leading: Image.network(
-                    "https://openweathermap.org/img/wn/${weather.icon}.png",
+                  leading: Container(
+                    color: Colors.green,
+                    height: 50.0,
+                    width: 50.0,
+                    child: Image.network(
+                      "https://openweathermap.org/img/wn/${weather.icon}.png",
+                    ),
                   ),
                   title: Text(weather.city),
-                  subtitle: Text(
-                    "${weather.temperature.toStringAsFixed(1)}°C - ${weather.description}",
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "Temperature: ${weather.temperature.toStringAsFixed(1)}°C",
+                      ),
+                      Text("Description: ${weather.description}"),
+                      Text("Humidity: ${weather.humidity}%"),
+                      Text("Wind Speed: ${weather.windSpeed} m/s"),
+                    ],
                   ),
                 );
+              },
+            ),
+          ),
+        ],
+      ),
+      drawer: Drawer(
+        child: ListView(
+          children: [
+            DrawerHeader(
+              decoration: BoxDecoration(color: Colors.green),
+              child: Text(
+                "Cameroon Weather App",
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              ),
+            ),
+            ListTile(
+              title: Text("Home"),
+              onTap: () {
+                Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              title: Text("About"),
+              onTap: () {
+                Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              title: Text("Contact"),
+              onTap: () {
+                Navigator.pop(context);
               },
             ),
           ],
