@@ -25,4 +25,8 @@ class Weather {
       icon: json["weather"][0]["icon"],
     );
   }
+  @override
+  String toString() {
+    return 'Weather{city: $city, temperature: $temperature, description: $description, icon: $icon, humidity: $humidity, windSpeed: $windSpeed}';
+  }
 }
